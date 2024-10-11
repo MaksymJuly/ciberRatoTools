@@ -3,19 +3,25 @@ import sys
 from croblink import *
 from math import *
 import xml.etree.ElementTree as ET
-
 from collections import deque
+
+rob_name = "pClient1"
+host = "localhost"
+pos = 1
+mapc = None
 
 CELLROWS=7
 CELLCOLS=14
 
+## MY VARIABLES ##
 motors_speed = 0.15
+num_mem_sell = 6
 
-# Initialize deques with a maximum length of 4
-front_sens_m = deque(maxlen=4)
-left_sens_m = deque(maxlen=4)
-right_sens_m = deque(maxlen=4)
-back_sens_m = deque(maxlen=4)
+front_sens_m = deque(maxlen=num_mem_sell) # Initialize deques
+left_sens_m = deque(maxlen=num_mem_sell)
+right_sens_m = deque(maxlen=num_mem_sell)
+back_sens_m = deque(maxlen=num_mem_sell)
+
 
 class MyRob(CRobLinkAngs):
     def __init__(self, rob_name, rob_id, angles, host):
@@ -71,26 +77,18 @@ class MyRob(CRobLinkAngs):
                 if self.measures.returningLed==True:
                     self.setReturningLed(False)
                 self.myrobot() 
-            
-
-def myrobot(self):
-    # sens_id = {'center':0, 'left':1, 'right':2, 'back':3}
     
-    update_memo(self)
+    def myrobot(self):
+        update_memo(self)
 
-    if emergency_stop(self):
-        # Stop
-        self.driveMotors(0,0)
-        for i in range(1500):
-            if self.measures.irSensor[3] > 2.5:
-                print("cia fignia")
-                break
-            self.driveMotors(-motors_speed,-motors_speed)
-    else:
-        # wander right and left
-        side_sens_diff(self)
-
-
+        if emergency_stop(self):
+            for i in range(1000):
+                if self.measures.irSensor[3] > 1:
+                    break
+                self.driveMotors(-motors_speed,-motors_speed)
+        else:
+            # wander right and left
+            side_sens_diff(self)
 
 ## my func ##
 def update_memo(self):
@@ -103,62 +101,26 @@ def update_memo(self):
     print_sensdist()
 
 def side_sens_diff(self):
-    a = average(list(right_sens_m)) - average(list(left_sens_m))
-
     
-    if average(list(front_sens_m)) > 1.2:
+    if average(list(front_sens_m)) > 1.2:   ## avr of front sensor distance measures
         # corners
         dist = 0.2
-        speed_mod = 0.6
+        speed_mod = 0.4
     else:
         # straight 
         dist = 1
         speed_mod = 0.3
 
-    if a > +dist:
+    side_sens_diff = average(list(right_sens_m)) - average(list(left_sens_m))
+    if side_sens_diff > +dist:
         # move left
         self.driveMotors(-motors_speed * speed_mod, motors_speed * speed_mod)
-    elif a < -dist:
+    elif side_sens_diff < -dist:
         # move right
         self.driveMotors(motors_speed * speed_mod ,-motors_speed * speed_mod)
     else:
         # move straight
         self.driveMotors(+ motors_speed,+ motors_speed)
-
-# def side_sens_diff(self):
-#     # Calculate difference between right and left sensors
-#     a = average(list(right_sens_m)) - average(list(left_sens_m))
-
-#     # Set a base speed and dynamic factor for speed adjustment
-#     base_speed = motors_speed
-#     dynamic_speed_factor = 1.0
-
-#     # Adjust speed based on front sensor distance
-#     front_distance = average(list(front_sens_m))
-    
-#     if front_distance < 0.8:
-#         # Increase speed if there's a lot of space ahead
-#         dynamic_speed_factor = 3
-#     elif front_distance > 1.3:
-#         # Moderate speed for moderate space
-#         dynamic_speed_factor = 1.2
-#     elif front_distance > 3.0:
-#         # Slow down as the front gets closer
-#         dynamic_speed_factor = 0.8
-#     else:
-#         # Near an obstacle, slow down further
-#         dynamic_speed_factor = 0.5
-
-#     # Further reduce speed in corners, but allow more aggressive turns when space permits
-#     if a > +0.5:
-#         # If the robot is turning left
-#         self.driveMotors(-base_speed * dynamic_speed_factor, base_speed * dynamic_speed_factor)
-#     elif a < -0.5:
-#         # If the robot is turning right
-#         self.driveMotors(base_speed * dynamic_speed_factor, -base_speed * dynamic_speed_factor * 0.8)
-#     else:
-#         # Moving straight
-#         self.driveMotors(base_speed * dynamic_speed_factor, base_speed * dynamic_speed_factor)
 
 def emergency_stop(self):
     if     self.measures.irSensor[0]   > 2 \
@@ -175,7 +137,7 @@ def print_sensdist():
     return
 
 def average(lst):
-    return sum(lst) / len(lst) if lst else 0
+        return sum(lst) / len(lst) if lst else 0
 
 
 
@@ -205,11 +167,6 @@ class Map():
                            None
                
            i=i+1
-
-rob_name = "pClient1"
-host = "localhost"
-pos = 1
-mapc = None
 
 for i in range(1, len(sys.argv),2):
     if (sys.argv[i] == "--host" or sys.argv[i] == "-h") and i != len(sys.argv) - 1:

@@ -1,5 +1,6 @@
 
 import socket
+from xml import sax
 
 UDP_IP = "127.0.0.1"
 UDP_PORT = 6000
@@ -8,7 +9,6 @@ NUM_IR_SENSORS = 4
 NUM_LINE_ELEMENTS = 7
 
 class CRobLink:
-
 
     def __init__ (self, robName, robId, host):
         self.robName = robName
@@ -84,7 +84,6 @@ class CRobLink:
         self.sock.sendto(msg.encode(),(self.host,self.port))
 
     #my_status = lambda self : self.status
-
 
 class CRobLinkAngs(CRobLink):
 
@@ -183,10 +182,6 @@ class CMeasures:
         self.gpsDirReady = False
 
         self.hearMessage=''
-
-
-
-from xml import sax
 
 class StructureHandler(sax.ContentHandler):
 
