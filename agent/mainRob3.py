@@ -14,7 +14,7 @@ mapc = None
 CELLROWS=7
 CELLCOLS=14
 
-#### MY VARIABLES ##
+#### MY VARIABLES ####
 calib_gps = [float(0), float(0), False]
 
 rows, cols = 27, 55   # Number of rows, cols
@@ -23,8 +23,8 @@ center_col = cols // 2
 MATRIX = [[ '▣' for _ in range(cols)] for _ in range(rows)] # Create a matrix 
 
 # Path to save the file
-file_path = '/home/ma/Aveiro/RMI/ciberRatoTools/agent/' + 'mapping.out'
-#### END MY VARIABELS ##
+file_path = '/home/ma/Aveiro/RMI/ciberRatoTools/agent/' + 'plan.in'
+#### END MY VARIABELS ####
 
 
 
@@ -101,43 +101,40 @@ class MyRob(CRobLinkAngs):
             return {'x': None, 'y': None}
 
         # Return calibrated GPS coordinates
-        gps = {'x': self.measures.x - calib_gps[0] + center_col, 'y': self.measures.y - calib_gps[1] + center_row}
+        gps = {'x': self.measures.x - calib_gps[0], 'y': self.measures.y - calib_gps[1]}
         return gps
 
-    def mapping_out(self, file_path):
-        file_content, i = '', 1
-        MATRIX[13][27] = '○'    # Start
+    def read_plan(self, file_path):
+        plan = []
+        with open(file_path, 'r') as file:
+            for line in file:
+                # Split the line into items, assuming space-separated values.
+                row = line.strip().split()
+                plan.append(row)
+        return plan
 
-        for row in MATRIX:
-            file_content = file_content + f'{i}\t'
-            i += 1
-            for col in row:
-                file_content = file_content + col
-            file_content = file_content + f' {i}\n'
-
-        # Writing content to the file
-        with open(file_path, "w") as file:
-            file.write(file_content)
-        print('\n - MapOut')
-
-    def update_wall_matrix(self):
-        pass
-
-    def plan_next_move(self):
+    def plan_next_move(self, plan):
         gps = self.get_gps()
-        start = (int(gps['x']), int(gps['y']))  # Starting position in (row, column) format
+        start = int(gps['x']), int(gps['y'])
+        goal = [None, None]
         
-        # Define the goal as the nearest unvisited cell
-        if self.measures.irSensor[0] < 1.5:
-            if :
-                goal = (start[0], start[1] + 2)
-            goal = (start[0] + 1, start[1]) 
-        else:
-            goal = (start[0], start[1] + 2)
-        
-        print('new_target')
+        move = plan.pop(0)
+        move = int(move[0]), int(move[1])
 
-        return goal[0], goal[1]
+        if move == [0, 0] and len(plan)>1:
+            move = plan.pop(0)
+            move = int(move[0]), int(move[1])
+            goal = move
+            print('new_target')
+        elif move == [0, 0]:
+            print('end_target')
+        else:
+            goal = move
+            print('new_target')
+
+        print(f'x:{start[0]}->{goal[0]} | x:{start[1]}->{goal[1]}')
+
+        return goal[0], goal[1], plan
 
     def go_to(self, x, y):
         # Get current position from GPS and compass
@@ -158,49 +155,49 @@ class MyRob(CRobLinkAngs):
         if abs(angle_difference) > 0.1:  # If the angle difference is significant
             # Rotate towards the target
             if angle_difference > 0:
-                self.driveMotors(-0.03, 0.03)  # Turn left
+                # Turn left 
+                self.driveMotors(-0.025, 0.025)
             else:
-                self.driveMotors(0.03, -0.03)  # Turn right
-        else:  # Move forward
-            self.driveMotors(0.08, 0.08)  # Move forward
-
-        # Print debug information
-        if distance_to_target == 1 or distance_to_target < 0.01:
-            print(  f"Current Position: ({current_x:.2f}, {current_y:.2f}),\n"
-                    f"Target Position: ({x:.2f}, {y:.2f}),\n"
-                    f"Distance to Target: {distance_to_target:.2f},\n"
-                    f"Angle to Target: {degrees(angle_to_target):.2f}°,\n"
-                    f"Angle Difference: {degrees(angle_difference):.2f}°\n\n")
+                # Turn right
+                self.driveMotors(0.025, -0.025)
+        else:
+            # Move forward
+            self.driveMotors(0.08, 0.08)
 
     def myrobot(self):
+        # Initialize plan variable
+        if not hasattr(self, 'plan'):
+            self.plan = None
+            
+        # Read plan
+        if self.plan is None:
+            self.plan = self.read_plan(file_path)
+            if self.plan is None:
+                print('error self.plan is None')
+                quit()
+
         # Initialize target variables
         if not hasattr(self, 'target_x') or not hasattr(self, 'target_y'):
             self.target_x, self.target_y = None, None
 
         # Check if we need to plan a new move
         if self.target_x is None or self.target_x is None:
-            self.target_x, self.target_y = self.plan_next_move()  # Find next target
+            self.target_x, self.target_y, self.plan = self.plan_next_move(self.plan)  # Find next target
+
+        if len(self.plan) == 0:
+            print('end')
+            self.driveMotors(0, 0)
+            quit()
 
         # Move towards the current target
         self.go_to(self.target_x, self.target_y)
 
         # Get current position from GPS and Compass
         gps = self.get_gps()
-        current_x, current_y, current_Q = gps['x'], gps['y'], self.measures.compass
+        current_x, current_y= gps['x'], gps['y']
 
         # Check if we have reached the target coords
         distance_to_target = sqrt((self.target_x - current_x) ** 2 + (self.target_y - current_y) ** 2)
-
-        # Check if we have reached the target rotation
-        comapss_rot = False
-        if current_Q < 3 and current_Q > -3:
-            if current_Q > 187 and current_Q < -187:
-                comapss_rot = True
-
-        # If close enough to the centre of the sell and rottation is right
-        if distance_to_target >= 0.6 and distance_to_target <= 0.4 and comapss_rot:
-                print(f'update_wall_matrix() {distance_to_target}')
-                self.update_wall_matrix()  # Update walls based on sensor readings
         
         # Clear the target for the next move
         if distance_to_target < 0.1:

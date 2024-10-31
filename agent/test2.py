@@ -4,7 +4,6 @@ from croblink import *
 from math import *
 import xml.etree.ElementTree as ET
 from collections import deque
-import time
 
 rob_name = "pClient1"
 host = "localhost"
@@ -17,14 +16,9 @@ CELLCOLS=14
 #### MY VARIABLES ####
 calib_gps = [float(0), float(0), False]
 
-# Map matrix
-rows, cols = 27, 55   # Number of rows, cols
-center_row = rows // 2
-center_col = cols // 2
-MATRIX = [[ '▣' for _ in range(cols)] for _ in range(rows)] # Create a matrix 
-
-# Path to save the file
-file_path = '/home/ma/Aveiro/RMI/ciberRatoTools/agent/' + 'mapping.out'
+rows = 26   # Number of rows
+cols = 54   # Number of columns
+MATRIX = [[ '▣' for _ in range(cols)] for _ in range(rows)]
 #### END MY VARIABELS ####
 
 
@@ -83,7 +77,7 @@ class MyRob(CRobLinkAngs):
                 if self.measures.returningLed==True:
                     self.setReturningLed(False)
                 self.myrobot() 
-    
+
     def get_gps(self):
         # Check if GPS calibration is done
         if not calib_gps[2]:
@@ -102,74 +96,8 @@ class MyRob(CRobLinkAngs):
             return {'x': None, 'y': None}
 
         # Return calibrated GPS coordinates
-        gps = {'x': self.measures.x - calib_gps[0] + center_col, 'y': self.measures.y - calib_gps[1] + center_row}
+        gps = {'x': self.measures.x - calib_gps[0], 'y': self.measures.y - calib_gps[1]}
         return gps
-
-    def mapping_out(self, file_path):
-        file_content, i = '', 1
-        MATRIX[13][27] = '○'    # Start
-
-        for row in MATRIX:
-            file_content = file_content + f'{i}\t'
-            i += 1
-            for col in row:
-                file_content = file_content + col
-            file_content = file_content + f' {i}\n'
-
-        # Writing content to the file
-        with open(file_path, "w") as file:
-            file.write(file_content)
-        print('\n - MapOut')
-
-    def update_wall_matrix(self):
-        pass
-
-    def plan_next_move(self):
-        gps = self.get_gps()
-        start = (int(gps['y']), int(gps['x']))  # Starting position in (row, column) format
-        goal = self.find_nearest_unvisited_cell(start)  # Define the goal as the nearest unvisited cell
-
-        if goal is None:
-            return None, None  # No valid move found
-
-        return goal[0], goal[1]
-
-    def find_nearest_unvisited_cell(self, start):
-        # Get the robot's current GPS position
-        current_x, current_y = start[1], start[0]
-
-        nearest_cell = None
-
-        up_sell = (current_x, current_y-1)
-        dw_sell = (current_x, current_y+1)
-        le_sell = (current_x-1, current_y)
-        ri_sell = (current_x+1, current_y)
-
-        # Iterate over the MATRIX to find unvisited cells
-        for row in range(rows):
-            for col in range(cols):
-                if MATRIX[row][col] == '▣':  # '▣' represents unvisited cells
-                    if (row, col) == ri_sell:
-                        nearest_cell = ri_sell
-                        return nearest_cell
-                    elif (row, col) == le_sell:
-                        nearest_cell = le_sell
-                        return nearest_cell
-                    else:
-                        if (row, col) == dw_sell:
-                            nearest_cell = dw_sell
-                            return nearest_cell
-                        elif (row, col) == up_sell:
-                            nearest_cell = up_sell
-                            return nearest_cell
-                
-        # non_visited = 0
-        # if non_visited <= 1538:
-        #     print('- mapping_out(file_path)')
-        #     self.mapping_out(file_path)
-        #     quit()
-
-        return nearest_cell if nearest_cell else None  # Return the nearest cell or None if no unvisited cells are found
 
     def go_to(self, x, y):
         # Get current position from GPS
@@ -183,27 +111,134 @@ class MyRob(CRobLinkAngs):
         distance_to_target = sqrt((x - current_x) ** 2 + (y - current_y) ** 2)
 
         # Calculate the angle difference to the target
-        angle_difference = angle_to_target - radians(self.measures.compass)  # Convert robot's angle to radians
+        angle_difference = angle_to_target - radians(self.measures.angle)  # Convert robot's angle to radians
         angle_difference = (angle_difference + pi) % (2 * pi) - pi  # Normalize to range [-π, π]
 
         # Adjust motor speeds based on angle difference and distance
         if abs(angle_difference) > 0.1:  # If the angle difference is significant
             # Rotate towards the target
             if angle_difference > 0:
-                self.driveMotors(0, 0.03)  # Turn left
+                self.driveMotors(0, 0.15)  # Turn left
             else:
-                self.driveMotors(0, -0.03)  # Turn right
+                self.driveMotors(0, -0.15)  # Turn right
         elif distance_to_target > 1:  # Move forward if close enough to the target
-            self.driveMotors(0.03, 0.03)  # Move forward
+            self.driveMotors(0.15, 0.15)  # Move forward
         else:
             self.driveMotors(0, 0)  # Stop
 
         # Optionally, print debug information
-        print(  f"Current Position: ({current_x:.2f}, {current_y:.2f}),\n"
-                f"Target Position: ({x:.2f}, {y:.2f}),\n"
-                f"Distance to Target: {distance_to_target:.2f},\n"
-                f"Angle to Target: {degrees(angle_to_target):.2f}°,\n"
-                f"Angle Difference: {degrees(angle_difference):.2f}°\n\n")
+        print(f"Current Position: ({current_x:.2f}, {current_y:.2f}), "
+            f"Target Position: ({x:.2f}, {y:.2f}), "
+            f"Distance to Target: {distance_to_target:.2f}, "
+            f"Angle to Target: {degrees(angle_to_target):.2f}°, "
+            f"Angle Difference: {degrees(angle_difference):.2f}°")
+
+    def update_wall_matrix(self):
+        # Get current GPS coordinates and convert to grid position
+        gps = self.get_gps()
+        current_x, current_y = gps['x'], gps['y']
+        row = int(current_y // 1)  # Assuming each cell is of size 1x1
+        col = int(current_x // 1)
+
+        # Check for walls using ultrasonic sensors
+        if self.measures.irSensor[0] < 1.6:  # Front sensor (wall close)
+            MATRIX[row][col + 1] = 'W'  # Mark wall on the right side
+        if self.measures.irSensor[1] < 1.6:  # Left sensor
+            MATRIX[row + 1][col] = 'W'  # Mark wall at the top (left of robot)
+        if self.measures.irSensor[2] < 1.6:  # Right sensor
+            MATRIX[row - 1][col] = 'W'  # Mark wall at the bottom (right of robot)
+
+        # Mark the current cell as visited
+        MATRIX[row][col] = 'V'
+
+    def plan_next_move(self):
+        # Implementing A* algorithm to find the next move
+        gps = self.get_gps()
+        start = (int(gps['y']), int(gps['x']))  # Starting position in (row, column) format
+        goal = self.find_nearest_unvisited_cell()  # Define the goal as the nearest unvisited cell
+
+        if goal is None:
+            return None, None  # No valid move found
+
+        # A* algorithm setup
+        open_set = deque([start])  # Cells to explore
+        came_from = {}  # Track path
+        g_score = {start: 0}  # Cost from start to current cell
+        f_score = {start: self.heuristic(start, goal)}  # Estimated cost from start to goal
+
+        while open_set:
+            current = min(open_set, key=lambda cell: f_score.get(cell, float('inf')))
+
+            if current == goal:
+                return self.reconstruct_path(came_from, current)  # Return the path from start to goal
+
+            open_set.remove(current)
+
+            for neighbor in self.get_neighbors(current):
+                tentative_g_score = g_score[current] + 1  # Cost from start to neighbor
+                if tentative_g_score < g_score.get(neighbor, float('inf')):
+                    # This path to neighbor is better than any previous one
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative_g_score
+                    f_score[neighbor] = tentative_g_score + self.heuristic(neighbor, goal)
+                    if neighbor not in open_set:
+                        open_set.append(neighbor)
+
+        return None, None  # No path found
+
+    def get_neighbors(self, cell):
+        row, col = cell
+        neighbors = []
+
+        # Check four possible directions (up, down, left, right)
+        if row > 0 and MATRIX[row - 1][col] != 'W':  # Up
+            neighbors.append((row - 1, col))
+        if row < rows - 1 and MATRIX[row + 1][col] != 'W':  # Down
+            neighbors.append((row + 1, col))
+        if col > 0 and MATRIX[row][col - 1] != 'W':  # Left
+            neighbors.append((row, col - 1))
+        if col < cols - 1 and MATRIX[row][col + 1] != 'W':  # Right
+            neighbors.append((row, col + 1))
+
+        return neighbors
+
+    def heuristic(self, a, b):
+        # Use Manhattan distance as heuristic
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+    def reconstruct_path(self, came_from, current):
+        # Reconstruct the path from start to goal
+        path = []
+        while current in came_from:
+            path.append(current)
+            current = came_from[current]
+        path.reverse()  # Return path from start to goal
+        if path:
+            target_cell = path[0]  # Get the next target from the path
+            return target_cell[1] + 0.5, target_cell[0] + 0.5  # Return as (x, y) coordinates
+        return None, None
+
+    def find_nearest_unvisited_cell(self):
+        # Get the robot's current GPS position
+        gps = self.get_gps()
+        current_x, current_y = int(gps['x']), int(gps['y'])
+
+        nearest_cell = None
+        min_distance = float('inf')  # Initialize with a very large distance
+
+        # Iterate over the MATRIX to find unvisited cells
+        for row in range(rows):
+            for col in range(cols):
+                if MATRIX[row][col] == '▣':  # Assuming '▣' represents unvisited cells
+                    # Calculate the distance to this unvisited cell
+                    distance = sqrt((row - current_y) ** 2 + (col - current_x) ** 2)
+
+                    # If this cell is closer than the previous closest one, update
+                    if distance < min_distance:
+                        min_distance = distance
+                        nearest_cell = (row, col)
+
+        return nearest_cell if nearest_cell else None  # Return the nearest cell or None if no unvisited cells are found
 
     def myrobot(self):
         # Initialize target variables
@@ -212,7 +247,7 @@ class MyRob(CRobLinkAngs):
 
         # Check if we need to plan a new move
         if self.target_x is None and self.target_y is None:
-            self.target_x, self.target_y = self.plan_next_move()  # Find next target
+            self.target_x, self.target_y = self.plan_next_move()  # Use A* to find next target
 
         # Move towards the current target
         self.go_to(self.target_x, self.target_y)
