@@ -139,7 +139,7 @@ def print_sensdist():
 def average(lst):
         return sum(lst) / len(lst) if lst else 0
 
-
+## end my func ##
 
 class Map():
     def __init__(self, filename):
